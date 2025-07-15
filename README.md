@@ -9,7 +9,7 @@ and machine learning applications with Project Aria glasses.
 
 1. Install the Project Aria Client SDK by following the instructions in the [official documentation](https://facebookresearch.github.io/projectaria_tools/docs/ARK/sdk/setup).
 
-2. Install the required Python packages:
+2. In the project directory, install the required Python packages:
     ```bash
     pip install -r requirements.txt
     ```
