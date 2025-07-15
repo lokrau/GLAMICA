@@ -1,5 +1,5 @@
 # Gaze and Language in Action: Multimodal Interfaces for Cognitive (GLAMICA) 
-## By: Lorenz Krause, Waqar Quershi, and Michael Rice
+## By: Lorenz Krause, Waqar Shahid Qureshi, and Michael Rice
 ## Aria Client SDK (given by Meta Project Aria Team)
 
 The Aria Client SDK with CLI provides robust capabilities for creating computer vision
