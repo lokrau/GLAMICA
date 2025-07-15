@@ -1,0 +1,31 @@
+Source,Relation,Target
+
+Cup of Tea,is_a,Meal
+Cup of Tea,uses_tool,Stove
+Cup of Tea,uses_tool,Pot
+Cup of Tea,uses_tool,Spoon
+Cup of Tea,uses_tool,Cup
+Cup of Tea,uses_tool,Faucet
+Cup of Tea,has_ingredient,Tea
+
+Glass of Water,is_a,Meal
+Glass of Water,uses_tool,Faucet
+Glass of Water,uses_tool,Cup
+
+Cooked Pasta,is_a,Meal
+Cooked Pasta,uses_tool,Stove
+Cooked Pasta,uses_tool,Pot
+Cooked Pasta,uses_tool,Faucet
+Cooked Pasta,uses_tool,Spoon
+Cooked Pasta,uses_tool,Plate
+Cooked Pasta,has_ingredient,Pasta
+
+Cooked Rice,is_a,Meal
+Cooked Rice,uses_tool,Stove
+Cooked Rice,uses_tool,Pot
+Cooked Rice,uses_tool,Faucet
+Cooked Rice,uses_tool,Spoon
+Cooked Rice,uses_tool,Plate
+Cooked Rice,uses_tool,Cup
+Cooked Rice,has_ingredient,Rice
+

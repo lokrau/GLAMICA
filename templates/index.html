@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        h2,
+        h3 {
+            color: #2c3e50;
+        }
+
+        form {
+            background: #fff;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin-top: 0.5rem;
+            resize: vertical;
+        }
+
+        input[type="submit"],
+        #recordButton {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        input[type="submit"]:hover,
+        #recordButton:hover {
+            background: #2980b9;
+        }
+
+        #status {
+            font-style: italic;
+            margin-top: 0.5rem;
+        }
+
+        ul {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            list-style-type: none;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        b {
+            color: #2c3e50;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .button-group input,
+        .button-group button {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button-group input:hover,
+        .button-group button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Your Kitchen Assistant</h2>
+
+    <form method="post" action="/" id="textForm">
+        <label for="message">Your Question:</label><br>
+        <textarea name="message" id="message" rows="4" cols="50" autofocus></textarea><br>
+
+        <div class="button-group">
+            <input type="submit" value="Send">
+            <button type="button" id="recordButton">Speak</button>
+            <input type="submit" formaction="/suggest" value="What can I make with these?"></input>
+        </div>
+    </form>
+
+    <p id="status"></p>
+
+
+    <ul>
+        <label for="conv_history">Conversation History:</label><br>
+        {% for entry in history %}
+        <li><b>{{ entry['role'] }}:</b> {{ entry['content'] }}</li>
+        {% endfor %}
+    </ul>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        const recordButton = document.getElementById("recordButton");
+        const statusText = document.getElementById("status");
+        const messageBox = document.getElementById("message");
+        const form = document.getElementById("textForm");
+
+        recordButton.onclick = async () => {
+            if (!isRecording) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) {
+                        audioChunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: "audio/webm" });
+                    const formData = new FormData();
+                    formData.append("audio", blob, "recording.webm");
+
+                    statusText.textContent = "Transcribing...";
+
+                    const res = await fetch("/transcribe_voice", {
+                        method: "POST",
+                        body: formData
+                    });
+                    const result = await res.json();
+
+                    if (result.text) {
+                        messageBox.value = result.text;
+                        form.submit();
+                    } else {
+                        statusText.textContent = "Could not transcribe audio.";
+                    }
+                };
+
+                mediaRecorder.start();
+                statusText.textContent = "Recording... Click again to stop.";
+                isRecording = true;
+            } else {
+                mediaRecorder.stop();
+                statusText.textContent = "Processing audio...";
+                isRecording = false;
+            }
+        };
+    </script>
+</body>
+
+</html>

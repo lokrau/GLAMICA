@@ -1,0 +1,88 @@
+# CSV with one hour of readings from the IMU of the Aria glasses to see how much it drifts all the time
+imu_data_one_hour.csv
+
+# Folder with fine-tuned models
+runs
+
+# Image data
+Kitchen-Objects-with-Hands-1
+data_split
+kitchen_vrs_files
+*.jpg
+
+# Generated files when using the system
+chat_history.txt
+detected_positions.csv
+
+# Environment variables file
+.env
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Editor & IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs and debug
+*.log
+*.pot
+*.patch
+
+# Testing
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.cache/
+
+# Packaging
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# PEP 582 (used by some Python package managers)
+__pypackages__/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# MyPy & other linters
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# PyInstaller
+*.spec
+
+# dotenv environment variable files
+.env
+.env.*
+
+# Local databases
+*.sqlite3
+*.db
+
+# Wheels
+*.whl
