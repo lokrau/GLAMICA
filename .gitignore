@@ -4,6 +4,9 @@ imu_data_one_hour.csv
 # Folder with fine-tuned models
 runs
 
+# Word files
+*.docx
+
 # Image data
 Kitchen-Objects-with-Hands-1
 data_split
