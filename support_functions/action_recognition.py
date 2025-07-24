@@ -60,13 +60,6 @@ with open("yamnet_faucet_recognition/model/yamnet_label_encoder.pkl", "rb") as f
     label_encoder = pickle.load(f)
 
 ## Functions
-### Record audio
-def record_audio(duration=DURATION, fs=SAMPLE_RATE):
-    print(f"Recording for {duration}s...")
-    audio = sd.rec(int(duration * fs), samplerate=fs, channels=1)
-    sd.wait()
-    return audio.flatten().astype(np.float32)
-
 ### Extract features with yamnet
 def extract_yamnet_features(audio):
     # YAMNet expects float32 waveform at 16kHz
@@ -74,14 +67,25 @@ def extract_yamnet_features(audio):
     return np.mean(embeddings.numpy(), axis=0)  # Shape: (1024,)
 
 ### Prediction function
-def live_predict():
-    audio = record_audio()
-    features = extract_yamnet_features(audio)
-    features = np.expand_dims(features, axis=0)  # Shape: (1, 1024)
+def predict_from_audio_array(audio_array, sample_rate=48000):
+    """
+    Expects mono audio as a 1D NumPy float32 array sampled at 48kHz.
+    Downsamples to 16kHz and passes to the YAMNet + faucet model.
+    """
+    # Resample to 16kHz for YAMNet
+    audio_resampled = librosa.resample(audio_array, orig_sr=sample_rate, target_sr=SAMPLE_RATE)
+    audio_resampled = audio_resampled.astype(np.float32)
+
+    # Extract features with YAMNet
+    features = extract_yamnet_features(audio_resampled)
+    features = np.expand_dims(features, axis=0)
+
+    # Predict
     prediction = model.predict(features)
     predicted_index = np.argmax(prediction)
     predicted_label = label_encoder.inverse_transform([predicted_index])[0]
-    print(f"Detected: {predicted_label}\n")
+    print(f"Detected: {predicted_label}")
     return predicted_label
+
 
 

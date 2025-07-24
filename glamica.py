@@ -18,6 +18,7 @@ import pyttsx3
 import openai
 import numpy as np
 import speech_recognition as sr
+import soundfile as sf
 import torch
 from ultralytics import YOLO
 from dotenv import load_dotenv
@@ -35,7 +36,7 @@ from common import quit_keypress, update_iptables
 
 ## local imports
 from support_functions.meal_knowledge import can_make_meal, meals
-from support_functions.action_recognition import get_stove_border_frame, overlaps_with_stove_frame, live_predict
+from support_functions.action_recognition import get_stove_border_frame, overlaps_with_stove_frame, predict_from_audio_array
 from support_functions.looking_at import get_gazed_object
 from inference import infer # Given by Aria
 
@@ -96,6 +97,7 @@ gaze_target_label = [None]
 
 ## Faucet state
 faucet_on = False # whether the faucet is currently on
+audio_block = None # audio block to save
 
 # Flask setup
 app = Flask(__name__)
@@ -247,7 +249,6 @@ def rec_image(image, model, allowed_classes=None):
 ## idea generation function
 def get_chatgpt_ideas(item_names, chat_history):
     available_items = set(item_names)
-    # available_tools = {item for item in available_items if item in {"oven", "knife", "cutting board", "pan", "sink", "cup"}}
     available_tools = {item for item in available_items if item in {"Cup", "Faucet", "Plate", "Pot", "Spoon", "Stove"}}
     available_ingredients = available_items - available_tools
 
@@ -353,6 +354,8 @@ def get_object_direction_summary():
             continue
         rel = relative_angle(angular_position[0], angle)
         zone = get_zone(rel)
+        if label == "Tea":
+            label = "Tea bags"
         summary.append(f"{label}: {zone}")
     if not summary:
         return "No objects detected."
@@ -364,6 +367,12 @@ def get_object_direction_summary():
 class StreamingClientObserver:
     def __init__(self):
         self.images = {}
+        self.audio_buffer = []
+        self.audio_lock = threading.Lock()
+        self.audio_max_value_ = (1 << (8 * 4 - 1)) - 1 # 4 bites per sample
+        self.sample_rate = 48000
+        self.block_size = 2 * self.sample_rate  # 2 seconds
+        self.channels = 7
 
     ### Callback for receiving images defined by the Aria SDK
     def on_image_received(self, image: np.array, record: ImageDataRecord):
@@ -390,6 +399,30 @@ class StreamingClientObserver:
                     angular_position[0] += delta_angle
 
                 last_imu_time[0] = timestamp
+    
+    ### Callback for receiving audio data
+
+    def on_audio_received(self, audio_data, timestamp_ns):
+            global audio_block
+            audio_np = np.array(audio_data.data).astype(np.float64) / self.audio_max_value_
+
+            try:
+                audio_np = audio_np.reshape((-1, self.channels))
+            except ValueError as e:
+                print(f"Error reshaping audio: {e}")
+                return
+
+            with self.audio_lock:
+                self.audio_buffer.append(audio_np)
+                current_audio = np.vstack(self.audio_buffer)
+
+                # If we have enough for 2 seconds, save and reset
+                if current_audio.shape[0] >= self.block_size:
+                    audio_block = current_audio[:self.block_size]
+
+                    # Keep remaining samples for next block
+                    self.audio_buffer = [current_audio[self.block_size:]]
+
 
 # Main function
 def main():
@@ -404,10 +437,11 @@ def main():
 
     ## configure subscription to listen to Arias RGB and IMU streams (given by Aria SDK)
     config = streaming_client.subscription_config
-    config.subscriber_data_type = aria.StreamingDataType.Rgb | aria.StreamingDataType.Imu | aria.StreamingDataType.EyeTrack
+    config.subscriber_data_type = aria.StreamingDataType.Rgb | aria.StreamingDataType.Imu | aria.StreamingDataType.EyeTrack | aria.StreamingDataType.Audio
     config.message_queue_size[aria.StreamingDataType.Rgb] = 1
     config.message_queue_size[aria.StreamingDataType.Imu] = 1000
     config.message_queue_size[aria.StreamingDataType.EyeTrack] = 1
+    config.message_queue_size[aria.StreamingDataType.Audio] = 10
 
     ## Set the security options (given by Aria SDK)
     options = aria.StreamingSecurityOptions()
@@ -490,7 +524,7 @@ def main():
                 else:
                     duration = current_time - stove_state["overlap_start_time"]
 
-                    if duration >= 1.5 and not stove_state["has_toggled_once"]:
+                    if duration >= 1.0 and not stove_state["has_toggled_once"]:
                         stove_state["toggle_count"] += 1
                         action = "turned on" if stove_state["toggle_count"] % 2 == 1 else "turned off"
                         stove_state["has_toggled_once"] = True
@@ -600,7 +634,7 @@ def main():
             rotated_gaze_x = orig_h - gaze_y
             rotated_gaze_y = gaze_x
             gaze_point = (rotated_gaze_x, rotated_gaze_y)
-            gaze_target = get_gazed_object(gaze_point, detections, threshold=1000)
+            gaze_target = get_gazed_object(gaze_point, detections, threshold=400)
             gaze_target_label[0] = gaze_target
             cv2.circle(processed_image, (int(rotated_gaze_x), int(rotated_gaze_y)), 10, (0, 0, 255), -1)
 
@@ -627,30 +661,37 @@ if __name__ == "__main__":
         while True:
             web_object_positions = object_positions.copy()
             time.sleep(1)
-    
+
     def faucet_thread():
-        global faucet_on, faucet_turned_on_time, faucet_reminder_count
-        while True:
-            is_on = live_predict() == "faucet"
+        global faucet_on, faucet_turned_on_time, faucet_reminder_count, audio_block
+        while audio_block is None:
+            time.sleep(1)
+        if audio_block is not None:
+            while True:
+                # Downmix 7-channel to mono
+                mono_audio = np.mean(audio_block, axis=1).astype(np.float32)
+                is_on = predict_from_audio_array(mono_audio) == "faucet"
 
-            if is_on and not faucet_on:
-                # Faucet just turned on
-                faucet_turned_on_time = time.time()
-                faucet_reminder_count = 1
-                faucet_on = True
+                if is_on and not faucet_on:
+                    # Faucet just turned on
+                    faucet_turned_on_time = time.time()
+                    faucet_reminder_count = 1
+                    faucet_on = True
 
-            elif not is_on and faucet_on:
-                # Faucet just turned off
-                faucet_on = False
-                faucet_turned_on_time = None
-                faucet_reminder_count = 1
+                elif not is_on and faucet_on:
+                    # Faucet just turned off
+                    faucet_on = False
+                    faucet_turned_on_time = None
+                    faucet_reminder_count = 1
 
-            elif faucet_on and faucet_turned_on_time:
-                elapsed = time.time() - faucet_turned_on_time
-                if elapsed >= faucet_reminder_count * 10:
-                    if tts_queue:
-                        tts_queue.put(f"The faucet has been turned on for a bit. You should check on it.")
-                    faucet_reminder_count += 1
+                elif faucet_on and faucet_turned_on_time:
+                    elapsed = time.time() - faucet_turned_on_time
+                    if elapsed >= faucet_reminder_count * 10:
+                        if tts_queue:
+                            tts_queue.put(f"The faucet has been turned on for a bit. You should check on it.")
+                        faucet_reminder_count += 1
+                time.sleep(0.5)
+
 
     # Start Flask and TTS in separate threads
     threading.Thread(target=flask_thread, daemon=True).start()
