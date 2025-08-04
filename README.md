@@ -3,7 +3,8 @@
 ## Aria Client SDK (given by Meta Project Aria Team)
 
 The Aria Client SDK with CLI provides robust capabilities for creating computer vision
-and machine learning applications with Project Aria glasses.
+and machine learning applications with Project Aria glasses. 
+A example video of the GLAMICA application in use can be found [here](https://youtu.be/BfiTB2UJyzU).
 
 ## Usage:
 
